@@ -1,0 +1,122 @@
+name: Auto Build FFmpeg
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check_version.outputs.should_build }}
+      short_sha: ${{ steps.get_sha.outputs.short_sha }}
+      full_sha: ${{ steps.get_sha.outputs.full_sha }}
+    steps:
+      - name: Get upstream FFmpeg SHA
+        id: get_sha
+        run: |
+          FULL_SHA=$(git ls-remote https://git.ffmpeg.org/ffmpeg.git HEAD | awk '{ print $1 }')
+          SHORT_SHA=${FULL_SHA:0:7}
+          echo "Latest upstream SHA: $FULL_SHA"
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "full_sha=$FULL_SHA" >> $GITHUB_OUTPUT
+
+      - name: Check if release exists
+        id: check_version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHORT_SHA: ${{ steps.get_sha.outputs.short_sha }}
+        run: |
+          TAG_NAME="build-$SHORT_SHA"
+          echo "Checking for release tag: $TAG_NAME"
+          
+          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists. Skipping build."
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "Release $TAG_NAME does not exist. Starting build."
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check
+    if: needs.check.outputs.should_build == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [linux, windows]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential nasm yasm cmake git pkg-config \
+            binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 \
+            autoconf libtool
+
+      - name: Run Build Script
+        run: |
+          chmod +x scripts/build.sh
+          ./scripts/build.sh ${{ matrix.target }}
+
+      - name: Prepare Artifact Name
+        id: rename
+        run: |
+          if [ "${{ matrix.target }}" == "windows" ]; then
+            mv output/ffmpeg.exe output/ffmpeg-win64.exe
+            echo "filename=ffmpeg-win64.exe" >> $GITHUB_OUTPUT
+          else
+            mv output/ffmpeg output/ffmpeg-linux64
+            echo "filename=ffmpeg-linux64" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: output/ffmpeg*
+
+  release:
+    needs: [check, build]
+    if: needs.check.outputs.should_build == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-linux
+          path: ./release_files
+
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-windows
+          path: ./release_files
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: build-${{ needs.check.outputs.short_sha }}
+          name: FFmpeg Minimal ${{ needs.check.outputs.short_sha }}
+          body: |
+            Automated build of minimal FFmpeg.
+            **Upstream commit:** https://github.com/FFmpeg/FFmpeg/commit/${{ needs.check.outputs.full_sha }}
+            
+            **Configuration:**
+            ```
+            --enable-static --disable-shared --disable-all --enable-ffmpeg --enable-avcodec --enable-avformat --enable-avfilter
+            --enable-swresample --enable-small --disable-doc --disable-debug --disable-network --disable-autodetect --disable-hwaccels
+            --disable-devices --enable-protocol=file,pipe --enable-zlib --enable-demuxer=* --enable-decoder=* --enable-parser=*
+            --enable-encoder=libopus,flac,pcm_s16le,pcm_s24le,pcm_f32le --enable-muxer=wav,ogg,flac,opus,mp4,matroska,webm,mov,ipod,adts,null
+            --enable-filter=aresample,pan,volume,loudnorm,atrim,asetpts,aformat,anull,concat,abuffer,asink --enable-libopus --enable-libsoxr --enable-nonfree
+            ```
+          files: |
+            release_files/*
+          draft: false
+          prerelease: false
