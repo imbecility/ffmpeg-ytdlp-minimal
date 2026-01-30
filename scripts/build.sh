@@ -107,6 +107,7 @@ if ! ./configure \
   --enable-static --disable-shared \
   --disable-all \
   --enable-ffmpeg \
+  --enable-ffmprobe \
   --enable-avcodec --enable-avformat --enable-avfilter --enable-swresample \
   --enable-small --disable-doc --disable-debug --disable-network --disable-autodetect --disable-hwaccels --disable-devices \
   --enable-protocol=file,pipe \
