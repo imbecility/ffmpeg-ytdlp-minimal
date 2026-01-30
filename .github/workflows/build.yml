@@ -66,17 +66,17 @@ jobs:
         run: |
           if [ "${{ matrix.target }}" == "windows" ]; then
             mv output/ffmpeg.exe output/ffmpeg-win64.exe
-            echo "filename=ffmpeg-win64.exe" >> $GITHUB_OUTPUT
+            mv output/ffprobe.exe output/ffprobe-win64.exe
           else
             mv output/ffmpeg output/ffmpeg-linux64
-            echo "filename=ffmpeg-linux64" >> $GITHUB_OUTPUT
+            mv output/ffprobe output/ffprobe-linux64
           fi
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.target }}
-          path: output/ffmpeg*
+          path: output/ff*
 
   release:
     needs: [check, build]
@@ -110,7 +110,7 @@ jobs:
             
             **Configuration:**
             ```
-            --enable-static --disable-shared --disable-all --enable-ffmpeg --enable-avcodec --enable-avformat --enable-avfilter
+            --enable-static --disable-shared --disable-all --enable-ffmpeg --enable-ffprobe --enable-avcodec --enable-avformat --enable-avfilter
             --enable-swresample --enable-small --disable-doc --disable-debug --disable-network --disable-autodetect --disable-hwaccels
             --disable-devices --enable-protocol=file,pipe --enable-zlib --enable-demuxer=* --enable-decoder=* --enable-parser=*
             --enable-encoder=libopus,flac,pcm_s16le,pcm_s24le,pcm_f32le --enable-muxer=wav,ogg,flac,opus,mp4,matroska,webm,mov,ipod,adts,null
