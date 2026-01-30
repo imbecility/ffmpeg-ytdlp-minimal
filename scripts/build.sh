@@ -13,6 +13,7 @@ if [ "$TARGET" == "windows" ]; then
     TARGET_OS="mingw32"
     STRIP="x86_64-w64-mingw32-strip"
     FFMPEG_EXE="ffmpeg.exe"
+    FFPROBE_EXE="ffprobe.exe"
     CMAKE_SYS_NAME="Windows"
     EXTRA_LIBS=""
 else
@@ -21,6 +22,7 @@ else
     TARGET_OS="linux"
     STRIP="strip"
     FFMPEG_EXE="ffmpeg"
+    FFPROBE_EXE="ffprobe"
     CMAKE_SYS_NAME="Linux"
     EXTRA_LIBS="-lm -lstdc++"
 fi
@@ -126,4 +128,6 @@ fi
 
 make -j$(nproc)
 $STRIP $FFMPEG_EXE
+$STRIP $FFPROBE_EXE
 cp $FFMPEG_EXE "$OUTPUT_DIR/"
+cp $FFPROBE_EXE "$OUTPUT_DIR/"
